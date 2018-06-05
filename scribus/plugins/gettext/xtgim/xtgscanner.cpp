@@ -54,14 +54,14 @@ XtgScanner::XtgScanner(QString filename, PageItem *item, bool textOnly, bool pre
 {
 	loadRawBytes(filename, input_Buffer);
 	if ((input_Buffer[0] == '\xFF') && (input_Buffer[1] == '\xFE'))
-	{
-		QByteArray tmpBuf;
-		for (int a = 2; a < input_Buffer.count(); a += 2)
-		{
-			tmpBuf.append(input_Buffer[a]);
-		}
-		input_Buffer = tmpBuf;
-	}
+          {
+            QByteArray tmpBuf;
+            for (int a = 2; a < input_Buffer.count(); a += 2)
+              {
+                tmpBuf.append(input_Buffer[a]);
+              }
+            input_Buffer = tmpBuf;
+          }
 	doc = item->doc();
 	initTagMode();
 	initTextMode();
@@ -446,7 +446,7 @@ void XtgScanner::setColor()
 
 	if (token == "C" || token == "M" || token == "Y" || token == "K")
 	{
-		token = "c" + token; 
+		token = "c" + token;
 		token = color.value(token);
 	}
 	else if (!doc->PageColors.contains(token))
@@ -640,7 +640,7 @@ void XtgScanner::setTabStops()
 		tbs.append(tb);
 	}
 	currentParagraphStyle.setTabValues(tbs);
-	
+
 }
 
 void XtgScanner::setPAttributes()
@@ -867,17 +867,22 @@ void XtgScanner::setEncoding()
 	else if (enc == 7)
 		encTest = "GB2312";
 	else if (enc == 8)
-		encTest = "UTF-8";
+		encTest = "UTF-16";
 	else if (enc == 9)
 		encTest = "UTF-8";
 	else if (enc == 19)
 		encTest = "windows-949";
 	else if (enc == 20)
 		encTest = "KSC_5601";
-	if (m_codecList.contains(encTest))
-		m_codec = QTextCodec::codecForName(encTest);
-	else
-		m_codec = QTextCodec::codecForName("cp1252");
+	if (m_codecList.contains(encTest)) {
+          qDebug() << "Found CODEC: "<< encTest;
+          m_codec = QTextCodec::codecForName(encTest);
+        }
+        else {
+          qDebug() << "Unsupported CODEC: " << encTest;
+          m_codec = QTextCodec::codecForName("cp1252");
+        }
+        qDebug() << "Active CODEC is " << m_codec->name();
 }
 
 /** Functions corresponding to tokens in textMode
@@ -1003,7 +1008,7 @@ void XtgScanner::defClose()	//Token >
 	}
 	if (define != 0)
 		define = 0;
-	enterState(textMode);	
+	enterState(textMode);
 }
 
 void XtgScanner::defEquals()	//Token =
@@ -1019,7 +1024,7 @@ void XtgScanner::defEquals()	//Token =
 			currentCharStyle.setName(sfcName);
 		enterState(textMode);
 	}
-	else 
+	else
 		define = 2;
 	inDef = true;
 }
@@ -1262,7 +1267,7 @@ QString XtgScanner::getToken()
 		else if (temp == '\\')
 		{
 			/**
-			An escape sequence is occurred, hence we will just append 
+			An escape sequence is occurred, hence we will just append
 			the next character in buffer to the text. This will automatically
 			deal the occurrance of '\@' or '\:' or any other relevant escapes
 			*/
@@ -1272,7 +1277,7 @@ QString XtgScanner::getToken()
 		else
 			textToAppend.append( nextSymbol() );
 	}
-	
+
 	if (currentState() == tagMode)
 	{
 		/**
@@ -1310,7 +1315,7 @@ QString XtgScanner::getToken()
 			/** append the * character and the nextSymbol to token so as to form a paragraph attribute and '\\' character to deal special characters that contain XPress Tags codes.
 			*/
 			token.append( nextSymbol() );
-			token.append( nextSymbol() ); 
+			token.append( nextSymbol() );
 		}
 		else if (temp == '\"')
 		{
@@ -1320,7 +1325,7 @@ QString XtgScanner::getToken()
 			top = top+1;
 			token = getToken();
 			enterState( previousState() );
-		} 
+		}
 		else if (temp.isDigit())
 		{
 			while (lookAhead().isDigit() )
@@ -1359,8 +1364,8 @@ QString XtgScanner::getToken()
 			top = top+1;
 			token=getToken();
 		}
-		else 
-			token.append( nextSymbol() );
+		else
+                  token.append( nextSymbol() );
 	}
 
 	if (currentState() == nameMode)
@@ -1417,7 +1422,7 @@ QString XtgScanner::getToken()
 			}
 		}
 	}
-	
+
 	if ( currentState() == stringMode )
 	{
 		/* This mode should return those strings which are inside an inch character, while in tagMode. Hence this should set the mode to tagMode before returning the string value. This will call a function QString sliceString() which will return the required string and maintains the top correctly
@@ -1455,134 +1460,141 @@ QChar XtgScanner::lookAhead(int adj)
 QChar XtgScanner::nextSymbol()
 {
 	char ch = 0;
+        QTextDecoder *decoder = m_codec->makeDecoder();
+
 	if (top < input_Buffer.length())
 	{
-		ch = input_Buffer.at(top++);
-		QByteArray ba;
-		ba.append(ch);
-		QString m_txt = m_codec->toUnicode(ba);
-		if (!m_txt.isEmpty())
-			return m_txt.at(0);
-		else
-			return QChar(0);
+                QString m_txt = "";
+
+                while((m_txt.isEmpty() && (top < input_Buffer.length()))) {
+                  // QString m_txt = m_codec->toUnicode(ba);
+                    ch = input_Buffer.at(top++);
+                    QByteArray ba;
+                    ba.append(ch);
+                    m_txt = decoder->toUnicode(ba);
+                  }
+                  if (!m_txt.isEmpty())
+                    return m_txt.at(0);
+                  else
+                    return QChar(0);
 	}
 	return QChar(0);
 }
 
-void XtgScanner::flushText()
-{
-	if (!textToAppend.isEmpty())
-	{
-		textToAppend.replace(QChar(10), SpecialChars::LINEBREAK);
-		textToAppend.replace(QChar(12), SpecialChars::FRAMEBREAK);
-		textToAppend.replace(QChar(30), SpecialChars::NBHYPHEN);
-		textToAppend.replace(QChar(160), SpecialChars::NBSPACE);
-		int posC = m_item->itemText.length();
-		m_item->itemText.insertChars(posC, textToAppend);
-		m_item->itemText.applyStyle(posC, currentParagraphStyle);
-		m_item->itemText.applyCharStyle(posC, textToAppend.length(), currentCharStyle);
-		textToAppend="";
-	}
-}
+        void XtgScanner::flushText()
+        {
+          if (!textToAppend.isEmpty())
+            {
+              textToAppend.replace(QChar(10), SpecialChars::LINEBREAK);
+              textToAppend.replace(QChar(12), SpecialChars::FRAMEBREAK);
+              textToAppend.replace(QChar(30), SpecialChars::NBHYPHEN);
+              textToAppend.replace(QChar(160), SpecialChars::NBSPACE);
+              int posC = m_item->itemText.length();
+              m_item->itemText.insertChars(posC, textToAppend);
+              m_item->itemText.applyStyle(posC, currentParagraphStyle);
+              m_item->itemText.applyCharStyle(posC, textToAppend.length(), currentCharStyle);
+              textToAppend="";
+            }
+        }
 
-bool XtgScanner::styleStatus(QStringList &name,QString &sfcname)
-{
-	int i;
-	if (sfcname == "")
-		return true;
-	for (i = 0; i < name.size(); i++)
-	{
-		if (name.at(i) == sfcname)
-			return true;
-	}
-	return false;
-}
+        bool XtgScanner::styleStatus(QStringList &name,QString &sfcname)
+        {
+          int i;
+          if (sfcname == "")
+            return true;
+          for (i = 0; i < name.size(); i++)
+            {
+              if (name.at(i) == sfcname)
+                return true;
+            }
+          return false;
+        }
 
-void XtgScanner::applyFeature(StyleFlagValue feature)
-{
-	flushText();
-	if (styleEffects & feature)
-		styleEffects &= ~feature;
-	else
-		styleEffects |= feature;
-	currentCharStyle.setFeatures(styleEffects.featureList());
-}
+        void XtgScanner::applyFeature(StyleFlagValue feature)
+        {
+          flushText();
+          if (styleEffects & feature)
+            styleEffects &= ~feature;
+          else
+            styleEffects |= feature;
+          currentCharStyle.setFeatures(styleEffects.featureList());
+        }
 
-void XtgScanner::xtgParse()
-{
-	/* Enter the default mode as textMode */
-	if (!m_append)
-	{
-		QString pStyleD = CommonStrings::DefaultParagraphStyle;
-		ParagraphStyle newStyle;
-		newStyle.setDefaultStyle(false);
-		newStyle.setParent(pStyleD);
-		m_item->itemText.clear();
-		m_item->itemText.setDefaultStyle(newStyle);
-	}
-	enterState(textMode);
-	currentParagraphStyle.setParent(CommonStrings::DefaultParagraphStyle);
-	currentParagraphStyle.charStyle().setParent(CommonStrings::DefaultCharacterStyle);
-	currentParagraphStyle.setLineSpacingMode(ParagraphStyle::AutomaticLineSpacing);
-	currentCharStyle = currentParagraphStyle.charStyle();
-	while (lookAhead() != QChar('\0'))
-	{
-		token = getToken();
-		QHash<QString,void (XtgScanner::*)(void)> *temp = nullptr;
-		if (Mode == tagMode)
-			temp = &tagModeHash;
-		else if (Mode == nameMode)
-			temp = &nameModeHash;
-		else if (Mode == textMode)
-			temp = &textModeHash;
-		if (temp->contains(token) )
+        void XtgScanner::xtgParse()
+        {
+          /* Enter the default mode as textMode */
+          if (!m_append)
+            {
+              QString pStyleD = CommonStrings::DefaultParagraphStyle;
+              ParagraphStyle newStyle;
+              newStyle.setDefaultStyle(false);
+              newStyle.setParent(pStyleD);
+              m_item->itemText.clear();
+              m_item->itemText.setDefaultStyle(newStyle);
+            }
+          enterState(textMode);
+          currentParagraphStyle.setParent(CommonStrings::DefaultParagraphStyle);
+          currentParagraphStyle.charStyle().setParent(CommonStrings::DefaultCharacterStyle);
+          currentParagraphStyle.setLineSpacingMode(ParagraphStyle::AutomaticLineSpacing);
+          currentCharStyle = currentParagraphStyle.charStyle();
+          while (lookAhead() != QChar('\0'))
+            {
+              token = getToken();
+              QHash<QString,void (XtgScanner::*)(void)> *temp = nullptr;
+              if (Mode == tagMode)
+                temp = &tagModeHash;
+              else if (Mode == nameMode)
+                temp = &nameModeHash;
+              else if (Mode == textMode)
+                temp = &textModeHash;
+              if (temp->contains(token) )
 		{
-			funPointer = temp->value(token);
-			(this->*funPointer)();
+                  funPointer = temp->value(token);
+                  (this->*funPointer)();
 		}
 
-		/**
-				Various character Style Applications <@stylesheetname>. We cannot hash this since stylesheetname
-				is not constant
-				*/
+              /**
+                 Various character Style Applications <@stylesheetname>. We cannot hash this since stylesheetname
+                 is not constant
+              */
 
-		else if ( (currentState() == tagMode ) && token.startsWith('@') && token.endsWith('>') )
+              else if ( (currentState() == tagMode ) && token.startsWith('@') && token.endsWith('>') )
 		{
-			/*here we receive a token @stylesheetname>, hence we have to slice of token to 
-				get the name of character stylesheet to be applied
-			*/
-			define = 0;
-			sfcName = token.remove(0,1);
-			sfcName = sfcName.remove(sfcName.size()-1,1);
-			flushText();
-		//	if (styleStatus(definedCStyles,sfcName))
-		//		writer->setCharStyle(sfcName);
-		//	else
-		//	{
-		//		showWarning(sfcName);
-		//		writer->setCharStyle("");
-		//	}
-		//	currentCharStyle = writer->getCurrentCharStyle();
+                  /*here we receive a token @stylesheetname>, hence we have to slice of token to
+                    get the name of character stylesheet to be applied
+                  */
+                  define = 0;
+                  sfcName = token.remove(0,1);
+                  sfcName = sfcName.remove(sfcName.size()-1,1);
+                  flushText();
+                  //	if (styleStatus(definedCStyles,sfcName))
+                  //		writer->setCharStyle(sfcName);
+                  //	else
+                  //	{
+                  //		showWarning(sfcName);
+                  //		writer->setCharStyle("");
+                  //	}
+                  //	currentCharStyle = writer->getCurrentCharStyle();
 		}
-		if (top >= input_Buffer.length())
-			break;
-	}
-	if (!textToAppend.isEmpty())
-	{
-		textToAppend.replace(QChar(10), SpecialChars::LINEBREAK);
-		textToAppend.replace(QChar(12), SpecialChars::FRAMEBREAK);
-		textToAppend.replace(QChar(30), SpecialChars::NBHYPHEN);
-		textToAppend.replace(QChar(160), SpecialChars::NBSPACE);
-		ParagraphStyle newStyle;
-		newStyle.setParent(currentParagraphStyle.name());
-		int posC = m_item->itemText.length();
-		m_item->itemText.insertChars(posC, textToAppend);
-		m_item->itemText.applyStyle(posC, newStyle);
-		m_item->itemText.applyCharStyle(posC, textToAppend.length(), currentCharStyle);
-	}
-//	qDebug()<<"Unsupported : "<<unSupported;
-}
+              if (top >= input_Buffer.length())
+                break;
+            }
+          if (!textToAppend.isEmpty())
+            {
+              textToAppend.replace(QChar(10), SpecialChars::LINEBREAK);
+              textToAppend.replace(QChar(12), SpecialChars::FRAMEBREAK);
+              textToAppend.replace(QChar(30), SpecialChars::NBHYPHEN);
+              textToAppend.replace(QChar(160), SpecialChars::NBSPACE);
+              ParagraphStyle newStyle;
+              newStyle.setParent(currentParagraphStyle.name());
+              int posC = m_item->itemText.length();
+              m_item->itemText.insertChars(posC, textToAppend);
+              m_item->itemText.applyStyle(posC, newStyle);
+              m_item->itemText.applyCharStyle(posC, textToAppend.length(), currentCharStyle);
+            }
+          //	qDebug()<<"Unsupported : "<<unSupported;
+        }
 
-XtgScanner::~XtgScanner()
-{
+        XtgScanner::~XtgScanner()
+          {
 }
